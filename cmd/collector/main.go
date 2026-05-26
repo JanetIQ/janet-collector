@@ -4,13 +4,19 @@ import (
 	"log"
 
 	janetk8sreceiver "github.com/janetIQ/k8sreceiver"
-
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/confmap/provider/envprovider"
+	"go.opentelemetry.io/collector/confmap/provider/fileprovider"
+	"go.opentelemetry.io/collector/confmap/provider/httpprovider"
+	"go.opentelemetry.io/collector/confmap/provider/yamlprovider"
 	"go.opentelemetry.io/collector/exporter/debugexporter"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/otelcol"
+	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/batchprocessor"
 	"go.opentelemetry.io/collector/processor/memorylimiterprocessor"
+	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
 )
 
 func main() {
@@ -23,6 +29,16 @@ func main() {
 	set := otelcol.CollectorSettings{
 		BuildInfo: info,
 		Factories: components,
+		ConfigProviderSettings: otelcol.ConfigProviderSettings{
+			ResolverSettings: confmap.ResolverSettings{
+				ProviderFactories: []confmap.ProviderFactory{
+					fileprovider.NewFactory(),
+					envprovider.NewFactory(),
+					yamlprovider.NewFactory(),
+					httpprovider.NewFactory(),
+				},
+			},
+		},
 	}
 
 	cmd := otelcol.NewCommand(set)
@@ -48,7 +64,7 @@ func components() (otelcol.Factories, error) {
 	// Processors
 	factories.Processors, err = otelcol.MakeFactoryMap(
 		batchprocessor.NewFactory(),
-		memorylimiterprocessor.NewFactory(),
+		processor.Factory(memorylimiterprocessor.NewFactory()),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -62,6 +78,9 @@ func components() (otelcol.Factories, error) {
 	if err != nil {
 		return otelcol.Factories{}, err
 	}
+
+	// Telemetry
+	factories.Telemetry = otelconftelemetry.NewFactory()
 
 	return factories, nil
 }
